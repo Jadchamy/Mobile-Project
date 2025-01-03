@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert' as convert;
 
 void main() => runApp(const EventCountdownApp());
 
@@ -24,6 +26,7 @@ class CountdownPage extends StatefulWidget {
 class _CountdownPageState extends State<CountdownPage> {
   final TextEditingController _eventController = TextEditingController();
   final List<Map<String, dynamic>> _events = [];
+  List<Map<String, dynamic>> _performers = [];
   Timer? _timer;
 
   @override
@@ -54,6 +57,25 @@ class _CountdownPageState extends State<CountdownPage> {
     setState(() {
       _events.removeAt(index);
     });
+  }
+
+  void _fetchPerformers(int eventId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('http://localhost:8080/getEvntAndPerf.php?event_id=$eventId'),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final jsonResponse = convert.jsonDecode(response.body);
+        setState(() {
+          _performers = List<Map<String, dynamic>>.from(jsonResponse);
+        });
+      } else {
+        print('Failed to fetch performers');
+      }
+    } catch (e) {
+      print('Error fetching performers: $e');
+    }
   }
 
   String _formatCountdown(DateTime eventDate) {
@@ -121,13 +143,28 @@ class _CountdownPageState extends State<CountdownPage> {
                 itemBuilder: (context, index) {
                   final event = _events[index];
                   return Card(
-                    child: ListTile(
+                    child: ExpansionTile(
                       title: Text(event['name']),
                       subtitle: Text(_formatCountdown(event['date'])),
-                      trailing: IconButton(
-                        icon: Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _deleteEvent(index),
-                      ),
+                      children: [
+                        ElevatedButton(
+                          onPressed: () {
+                            // Fetch performers for the specific event
+                            _fetchPerformers(index + 1);
+                          },
+                          child: Text('Show Performers'),
+                        ),
+                        ..._performers.map((performer) {
+                          return ListTile(
+                            title: Text(performer['name']),
+                            subtitle: Text(performer['type']),
+                          );
+                        }).toList(),
+                        IconButton(
+                          icon: Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => _deleteEvent(index),
+                        ),
+                      ],
                     ),
                   );
                 },
